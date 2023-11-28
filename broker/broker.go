@@ -116,14 +116,8 @@ func (g *GolOp) ExecuteTurns(req gol.Request, res *gol.Response) (err error) {
 	g.needSave = make(chan bool, 1)
 	g.pause = make(chan bool, 1)
 	//turn := 0 need to un comment when change to extention mode(game can be saved and continue)
-	g.world = make([][]uint8, req.P.ImageHeight)
-	res.NewWorld = make([][]uint8, req.P.ImageHeight)
-	for i := range g.world {
-		g.world[i] = make([]uint8, req.P.ImageWidth)
-	}
-	for i := range res.NewWorld {
-		res.NewWorld[i] = make([]uint8, req.P.ImageWidth)
-	}
+	g.world = initWorld(req.P.ImageHeight, req.P.ImageWidth)
+	res.NewWorld = initWorld(req.P.ImageHeight, req.P.ImageWidth)
 	copyWhole(g.world, req.World)
 	g.completedTurn = 0
 	mutex.Unlock()
@@ -133,22 +127,77 @@ func (g *GolOp) ExecuteTurns(req gol.Request, res *gol.Response) (err error) {
 		res.Final = gol.FinalTurnComplete{CompletedTurns: req.P.Turns, Alive: calculateAliveCells(g.world)}
 		return
 	} else {
-		workers := []string{"54.227.67.232:8030", "3.90.111.104:8030", "54.237.222.162:8030", "3.87.240.120:8030"}
+		//workers := []string{"54.227.67.232:8030", "3.90.111.104:8030", "54.237.222.162:8030", "3.87.240.120:8030"}
+		workers := []string{"127.0.0.1:8031", "127.0.0.1:8032", "127.0.0.1:8033", "127.0.0.1:8034"}
 		clients := make([]*rpc.Client, len(workers))
 		for i, worker := range workers {
 			client, _ := rpc.Dial("tcp", worker)
 			defer client.Close()
 			clients[i] = client
 		}
-		//worker1 := "127.0.0.1:8031"
-		//client1, _ := rpc.Dial("tcp", worker1)
-		//defer client1.Close()
-		//worker2 := "127.0.0.1:8032"
-		//client2, _ := rpc.Dial("tcp", worker2)
-		//defer client2.Close()
-		//worker3 := "127.0.0.1:8033"
-		//client3, _ := rpc.Dial("tcp", worker3)
-		//defer client3.Close()
+		partHeight := req.P.ImageHeight / len(clients)
+		haloWorker := make([]worker, 4)
+		worker1 := worker{
+			worldPart: initWorld(partHeight, req.P.ImageWidth),
+			upperHalo: make(chan []uint8, 1),
+			lowerHalo: make(chan []uint8, 1),
+		}
+		fmt.Println("here", 1)
+		worker1.upperHalo <- g.world[req.P.ImageHeight-1]
+		//copy(worker1.upperHalo, g.world[req.P.ImageHeight-1])
+		fmt.Println("here", 2)
+		worker1.lowerHalo <- g.world[partHeight]
+		//copy(worker1.lowerHalo, g.world[req.P.ImageHeight])
+		for i := 0; i < partHeight; i++ {
+			copy(worker1.worldPart[i], g.world[i])
+		}
+		haloWorker[0] = worker1
+		worker2 := worker{
+			worldPart: initWorld(partHeight, req.P.ImageWidth),
+			upperHalo: make(chan []uint8, 1),
+			lowerHalo: make(chan []uint8, 1),
+		}
+		worker2.upperHalo <- g.world[partHeight-1]
+		fmt.Println("here", 3)
+		//copy(worker2.upperHalo, g.world[partHeight-1])
+		worker2.lowerHalo <- g.world[2*partHeight]
+		fmt.Println("here", 4)
+		//copy(worker2.lowerHalo, g.world[2*partHeight])
+		for i := partHeight; i < 2*partHeight; i++ {
+			copy(worker2.worldPart[i-partHeight], g.world[i])
+		}
+		haloWorker[1] = worker2
+		worker3 := worker{
+			worldPart: initWorld(partHeight, req.P.ImageWidth),
+			upperHalo: make(chan []uint8, 1),
+			lowerHalo: make(chan []uint8, 1),
+		}
+		worker3.upperHalo <- g.world[2*partHeight-1]
+		fmt.Println("here", 5)
+		//copy(worker3.upperHalo, g.world[2*partHeight-1])
+		worker3.lowerHalo <- g.world[3*partHeight]
+		fmt.Println("here", 6)
+		//copy(worker3.lowerHalo, g.world[3*partHeight])
+		for i := 2 * partHeight; i < 3*partHeight; i++ {
+			copy(worker3.worldPart[i-2*partHeight], g.world[i])
+		}
+		haloWorker[2] = worker3
+		worker4 := worker{
+			worldPart: initWorld(partHeight, req.P.ImageWidth),
+			upperHalo: make(chan []uint8, 1),
+			lowerHalo: make(chan []uint8, 1),
+		}
+		worker4.upperHalo <- g.world[3*partHeight-1]
+		fmt.Println("here", 7)
+		//copy(worker4.upperHalo, g.world[3*partHeight-1])
+		worker4.lowerHalo <- g.world[0]
+		fmt.Println("here", 8)
+		//copy(worker4.lowerHalo, g.world[0])
+		for i := 3 * partHeight; i < 4*partHeight; i++ {
+			copy(worker4.worldPart[i-3*partHeight], g.world[i])
+		}
+		haloWorker[3] = worker4
+		fmt.Println("here", 9)
 		for t := 0; t < req.P.Turns; t++ { //t need to be turn when extention mode
 			select {
 			case <-g.pause:
@@ -163,17 +212,53 @@ func (g *GolOp) ExecuteTurns(req gol.Request, res *gol.Response) (err error) {
 				break
 			}
 			allPartsChan := make(chan [][]uint8, 1)
-			partHeight := req.P.ImageHeight / len(clients)
+			if t == 1 {
+				worker1.worldPart = nil
+				worker2.worldPart = nil
+				worker3.worldPart = nil
+				worker4.worldPart = nil
+			}
 
 			for i := 0; i < len(clients); i++ {
-
+				fmt.Println("in client", i)
+				//go func(i int) {
+				//	partInfo := gol.PartInfo{g.world, i * partHeight, (i + 1) * partHeight, req.P.ImageWidth}
+				//	newPart := new(gol.NewPart)
+				//	clients[i].Call(gol.WorkerProcess, partInfo, newPart)
+				//	mutex.Lock()
+				//	for h := i * partHeight; h < (i+1)*partHeight; h++ {
+				//		copy(res.NewWorld[h], newPart.NewWorldPart[h])
+				//	}
+				//	allPartsChan <- res.NewWorld
+				//	mutex.Unlock()
+				//}(i)
 				go func(i int) {
-					partInfo := gol.PartInfo{g.world, i * partHeight, (i + 1) * partHeight, req.P.ImageWidth}
-					newPart := new(gol.NewPart)
-					clients[i].Call(gol.WorkerProcess, partInfo, newPart)
+					//request := gol.HaloReq{haloWorker[i].worldPart, <-haloWorker[i].upperHalo,
+					//	<-haloWorker[i].lowerHalo, partHeight, req.P.ImageWidth}
+					request := gol.HaloReq{nil, <-haloWorker[i].upperHalo,
+						<-haloWorker[i].lowerHalo, partHeight, req.P.ImageWidth}
+					if t == 0 {
+						request.WorldPart = haloWorker[i].worldPart
+					}
+					response := new(gol.HaloRes)
+					clients[i].Call(gol.WorkerProcess, request, response)
 					mutex.Lock()
 					for h := i * partHeight; h < (i+1)*partHeight; h++ {
-						copy(res.NewWorld[h], newPart.NewWorldPart[h])
+						copy(res.NewWorld[h], response.WorldPart[h-i*partHeight])
+					}
+					if i == 0 { //1
+						worker2.upperHalo <- response.WorldPart[partHeight-1]
+						worker4.lowerHalo <- response.WorldPart[0]
+					} else if i == 1 { //2
+						worker1.lowerHalo <- response.WorldPart[0]
+						worker3.upperHalo <- response.WorldPart[partHeight-1]
+					} else if i == 2 {
+						worker2.lowerHalo <- response.WorldPart[0]
+						worker4.upperHalo <- response.WorldPart[partHeight-1]
+
+					} else {
+						worker1.upperHalo <- response.WorldPart[partHeight-1]
+						worker3.lowerHalo <- response.WorldPart[0]
 					}
 					allPartsChan <- res.NewWorld
 					mutex.Unlock()
@@ -208,10 +293,7 @@ func (g *GolOp) Timer(req gol.Request, res *gol.ReportAlive) (err error) {
 }
 
 func (g *GolOp) KeyOp(op gol.KeyPress, res *gol.Response) (err error) {
-	res.NewWorld = make([][]uint8, op.P.ImageHeight)
-	for i := range res.NewWorld {
-		res.NewWorld[i] = make([]uint8, op.P.ImageWidth)
-	}
+	res.NewWorld = initWorld(op.P.ImageHeight, op.P.ImageWidth)
 	switch op.Key {
 	case 's':
 		// Save the game state
@@ -257,8 +339,16 @@ func (g *GolOp) Resume(op gol.KeyPress, res *gol.Response) (err error) {
 	g.pause <- false
 	return
 }
+func (g *GolOp) Live(req gol.Request, res *gol.Response) (err error) {
+	res.NewWorld = initWorld(req.P.ImageHeight, req.P.ImageWidth)
+	mutex.Lock()
+	copyWhole(res.NewWorld, g.world)
+	res.CurrentTurn = g.completedTurn
+	mutex.Unlock()
+	return
+}
 func main() {
-	pAddr := flag.String("port", "8040", "Port to listen on")
+	pAddr := flag.String("port", "8030", "Port to listen on")
 	flag.Parse()
 	rand.Seed(time.Now().UnixNano())
 	rpc.Register(&GolOp{})
@@ -271,4 +361,18 @@ func main() {
 	}(listener)
 	rpc.Accept(listener)
 	fmt.Println("connected")
+}
+
+func initWorld(height, width int) [][]uint8 {
+	world := make([][]uint8, height)
+	for i := range world {
+		world[i] = make([]uint8, width)
+	}
+	return world
+}
+
+type worker struct {
+	worldPart [][]uint8
+	upperHalo chan []uint8
+	lowerHalo chan []uint8
 }
