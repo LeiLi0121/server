@@ -37,3 +37,15 @@ type PartInfo struct {
 type NewPart struct {
 	NewWorldPart [][]uint8
 }
+
+type HaloReq struct {
+	WorldPart  [][]uint8
+	UpperHalo  []uint8
+	LowerHalo  []uint8
+	PartHeight int
+	Width      int
+}
+
+type HaloRes struct {
+	WorldPart [][]uint8
+}
