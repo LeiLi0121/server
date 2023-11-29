@@ -7,6 +7,7 @@ var KillProcess = "GolOp.Kill"
 var ResumeProcess = "GolOp.Resume"
 
 var WorkerProcess = "Worker.Worker"
+var WorkerKill = "Worker.Kill"
 
 type Request struct {
 	World [][]uint8
