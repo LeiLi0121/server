@@ -10,37 +10,9 @@ import (
 	"uk.ac.bris.cs/gameoflife/gol"
 )
 
-//func calculateNextState(startY, endY int, world [][]uint8) [][]uint8 {
-//
-//	newWorld := make([][]uint8, len(world))
-//	for i := range newWorld {
-//		newWorld[i] = make([]uint8, len(world[i]))
-//	}
-//	for i := startY; i < endY; i++ { //each row
-//		for k := 0; k < len(world[i]); k++ { //each item in row
-//			numOfAlive := calculateNearAlive(world, i, k)
-//			currentNode := world[i][k]
-//
-//			//rules for updating the cell state
-//			if world[i][k] == 255 {
-//				if numOfAlive < 2 {
-//					newWorld[i][k] = 0
-//				} else if numOfAlive == 2 || numOfAlive == 3 {
-//					newWorld[i][k] = currentNode
-//				} else if numOfAlive > 3 {
-//					newWorld[i][k] = 0
-//				}
-//			} else if currentNode == 0 && numOfAlive == 3 {
-//				newWorld[i][k] = 255
-//			}
-//		}
-//	}
-//
-//	return newWorld
-//}
 func calculateNextState(startY, endY int, world [][]uint8) [][]uint8 {
 
-	newWorld := make([][]uint8, len(world)-2)
+	newWorld := make([][]uint8, len(world))
 	for i := range newWorld {
 		newWorld[i] = make([]uint8, len(world[i]))
 	}
@@ -52,14 +24,14 @@ func calculateNextState(startY, endY int, world [][]uint8) [][]uint8 {
 			//rules for updating the cell state
 			if world[i][k] == 255 {
 				if numOfAlive < 2 {
-					newWorld[i-1][k] = 0
+					newWorld[i][k] = 0
 				} else if numOfAlive == 2 || numOfAlive == 3 {
-					newWorld[i-1][k] = currentNode
+					newWorld[i][k] = currentNode
 				} else if numOfAlive > 3 {
-					newWorld[i-1][k] = 0
+					newWorld[i][k] = 0
 				}
 			} else if currentNode == 0 && numOfAlive == 3 {
-				newWorld[i-1][k] = 255
+				newWorld[i][k] = 255
 			}
 		}
 	}
@@ -88,11 +60,11 @@ func calculateNearAlive(world [][]uint8, row, col int) int {
 			adjacent[i].y = len(world) - 1
 		}
 		adjacent[i].x += col
-		if adjacent[i].x == len(world[1]) {
+		if adjacent[i].x == len(world[i]) {
 			adjacent[i].x = 0
 		}
 		if adjacent[i].x == -1 {
-			adjacent[i].x = len(world[1]) - 1
+			adjacent[i].x = len(world[i]) - 1
 		}
 	}
 	//count alive using for
@@ -106,65 +78,23 @@ func calculateNearAlive(world [][]uint8, row, col int) int {
 }
 
 type Worker struct {
-	part  [][]uint8
-	hight int
 }
 
-//func (w *Worker) Worker(info gol.PartInfo, part *gol.NewPart) (err error) {
-//	fmt.Println("called worker1")
-//	part.NewWorldPart = make([][]uint8, info.EndY)
-//	for p := range part.NewWorldPart {
-//		part.NewWorldPart[p] = make([]uint8, info.Width)
-//	}
-//	part.NewWorldPart = calculateNextState(info.StartY, info.EndY, info.World)
-//	return
-//}
-func (w *Worker) Worker(req gol.HaloReq, res *gol.HaloRes) (err error) {
-	//fmt.Println(req.WorldPart)
-	if req.WorldPart != nil {
-		fmt.Println("update")
-		w.part = initWorld(req.PartHeight, req.Width)
-		w.hight = req.PartHeight
-		//fmt.Println("called worker1")
-		res.WorldPart = initWorld(req.PartHeight, req.Width)
-		res.WorldPart = initWorld(req.PartHeight, req.Width)
-		//res.WorldPart = initWorld(req.PartHeight, req.Width)
-		//res.WorldPart = make([][]uint8, req.PartHeight)
-		//for p := range res.WorldPart {
-		//	res.WorldPart[p] = make([]uint8, req.Width)
-		//}
-		temp := make([][]uint8, 0, req.PartHeight+2)
-		temp = append(temp, req.UpperHalo)
-		for _, row := range req.WorldPart {
-			temp = append(temp, row)
-		}
-		temp = append(temp, req.LowerHalo)
-		res.WorldPart = calculateNextState(1, req.PartHeight+1, temp)
-		//res.WorldPart = calculateNextState(1, req.PartHeight, temp)
-		copyWhole(w.part, res.WorldPart)
-		return
-	} else {
-		fmt.Println("continue")
-		res.WorldPart = initWorld(req.PartHeight, req.Width)
-		res.WorldPart = initWorld(req.PartHeight, req.Width)
-		temp := make([][]uint8, 0, req.PartHeight+2)
-		temp = append(temp, req.UpperHalo)
-		for _, row := range w.part {
-			temp = append(temp, row)
-		}
-		temp = append(temp, req.LowerHalo)
-		res.WorldPart = calculateNextState(1, req.PartHeight+1, temp)
-		copyWhole(w.part, res.WorldPart)
-		return
+func (w *Worker) Worker(info gol.PartInfo, part *gol.NewPart) (err error) {
+	fmt.Println("called worker1")
+	part.NewWorldPart = make([][]uint8, info.EndY)
+	for p := range part.NewWorldPart {
+		part.NewWorldPart[p] = make([]uint8, info.Width)
 	}
-
+	part.NewWorldPart = calculateNextState(info.StartY, info.EndY, info.World)
+	return
 }
 func main() {
-	pAddr := flag.String("port", "8030", "Port to listen on")
-	//pAddr := flag.String("port", "8031", "Port to listen on")
+	//pAddr := flag.String("port", "8030", "Port to listen on")
+	pAddr := flag.String("port", "8031", "Port to listen on")
 	flag.Parse()
 	rand.Seed(time.Now().UnixNano())
-	rpc.Register(&Worker{hight: 0})
+	rpc.Register(&Worker{})
 	listener, _ := net.Listen("tcp", ":"+*pAddr)
 	defer func(listener net.Listener) {
 		err := listener.Close()
@@ -174,18 +104,4 @@ func main() {
 	}(listener)
 	rpc.Accept(listener)
 	fmt.Println("connected")
-}
-
-func copyWhole(dst, src [][]uint8) {
-	for i := range src {
-		copy(dst[i], src[i])
-	}
-}
-
-func initWorld(height, width int) [][]uint8 {
-	world := make([][]uint8, height)
-	for i := range world {
-		world[i] = make([]uint8, width)
-	}
-	return world
 }
