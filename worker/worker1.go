@@ -160,8 +160,8 @@ func (w *Worker) Worker(req gol.HaloReq, res *gol.HaloRes) (err error) {
 
 }
 func main() {
-	//pAddr := flag.String("port", "8030", "Port to listen on")
-	pAddr := flag.String("port", "8031", "Port to listen on")
+	pAddr := flag.String("port", "8030", "Port to listen on")
+	//pAddr := flag.String("port", "8031", "Port to listen on")
 	flag.Parse()
 	rand.Seed(time.Now().UnixNano())
 	rpc.Register(&Worker{hight: 0})
