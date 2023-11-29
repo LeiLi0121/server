@@ -104,6 +104,7 @@ type GolOp struct {
 	pause         chan bool
 	needResume    bool
 	needSave      chan bool
+	//needKill      chan bool
 	//worldBeforeQuit [][]uint8
 	//turnBeforeQuit  int
 
@@ -142,10 +143,10 @@ func (g *GolOp) ExecuteTurns(req gol.Request, res *gol.Response) (err error) {
 			upperHalo: make(chan []uint8, 1),
 			lowerHalo: make(chan []uint8, 1),
 		}
-		fmt.Println("here", 1)
+		//fmt.Println("here", 1)
 		worker1.upperHalo <- g.world[req.P.ImageHeight-1]
 		//copy(worker1.upperHalo, g.world[req.P.ImageHeight-1])
-		fmt.Println("here", 2)
+		//fmt.Println("here", 2)
 		worker1.lowerHalo <- g.world[partHeight]
 		//copy(worker1.lowerHalo, g.world[req.P.ImageHeight])
 		for i := 0; i < partHeight; i++ {
@@ -158,10 +159,10 @@ func (g *GolOp) ExecuteTurns(req gol.Request, res *gol.Response) (err error) {
 			lowerHalo: make(chan []uint8, 1),
 		}
 		worker2.upperHalo <- g.world[partHeight-1]
-		fmt.Println("here", 3)
+		//fmt.Println("here", 3)
 		//copy(worker2.upperHalo, g.world[partHeight-1])
 		worker2.lowerHalo <- g.world[2*partHeight]
-		fmt.Println("here", 4)
+		//fmt.Println("here", 4)
 		//copy(worker2.lowerHalo, g.world[2*partHeight])
 		for i := partHeight; i < 2*partHeight; i++ {
 			copy(worker2.worldPart[i-partHeight], g.world[i])
@@ -173,10 +174,10 @@ func (g *GolOp) ExecuteTurns(req gol.Request, res *gol.Response) (err error) {
 			lowerHalo: make(chan []uint8, 1),
 		}
 		worker3.upperHalo <- g.world[2*partHeight-1]
-		fmt.Println("here", 5)
+		//fmt.Println("here", 5)
 		//copy(worker3.upperHalo, g.world[2*partHeight-1])
 		worker3.lowerHalo <- g.world[3*partHeight]
-		fmt.Println("here", 6)
+		//fmt.Println("here", 6)
 		//copy(worker3.lowerHalo, g.world[3*partHeight])
 		for i := 2 * partHeight; i < 3*partHeight; i++ {
 			copy(worker3.worldPart[i-2*partHeight], g.world[i])
@@ -188,17 +189,18 @@ func (g *GolOp) ExecuteTurns(req gol.Request, res *gol.Response) (err error) {
 			lowerHalo: make(chan []uint8, 1),
 		}
 		worker4.upperHalo <- g.world[3*partHeight-1]
-		fmt.Println("here", 7)
+		//fmt.Println("here", 7)
 		//copy(worker4.upperHalo, g.world[3*partHeight-1])
 		worker4.lowerHalo <- g.world[0]
-		fmt.Println("here", 8)
+		//fmt.Println("here", 8)
 		//copy(worker4.lowerHalo, g.world[0])
 		for i := 3 * partHeight; i < 4*partHeight; i++ {
 			copy(worker4.worldPart[i-3*partHeight], g.world[i])
 		}
 		haloWorker[3] = worker4
-		fmt.Println("here", 9)
+		//fmt.Println("here", 9)
 		for t := 0; t < req.P.Turns; t++ { //t need to be turn when extention mode
+			fmt.Println("turn", t)
 			select {
 			case <-g.pause:
 				pause := <-g.pause
@@ -210,6 +212,7 @@ func (g *GolOp) ExecuteTurns(req gol.Request, res *gol.Response) (err error) {
 				return
 			default:
 				break
+
 			}
 			allPartsChan := make(chan [][]uint8, 1)
 			if t == 1 {
@@ -220,7 +223,7 @@ func (g *GolOp) ExecuteTurns(req gol.Request, res *gol.Response) (err error) {
 			}
 
 			for i := 0; i < len(clients); i++ {
-				fmt.Println("in client", i)
+				//fmt.Println("in client", i)
 				//go func(i int) {
 				//	partInfo := gol.PartInfo{g.world, i * partHeight, (i + 1) * partHeight, req.P.ImageWidth}
 				//	newPart := new(gol.NewPart)
@@ -241,7 +244,10 @@ func (g *GolOp) ExecuteTurns(req gol.Request, res *gol.Response) (err error) {
 						request.WorldPart = haloWorker[i].worldPart
 					}
 					response := new(gol.HaloRes)
-					clients[i].Call(gol.WorkerProcess, request, response)
+					err := clients[i].Call(gol.WorkerProcess, request, response)
+					if err != nil {
+						return
+					}
 					mutex.Lock()
 					for h := i * partHeight; h < (i+1)*partHeight; h++ {
 						copy(res.NewWorld[h], response.WorldPart[h-i*partHeight])
@@ -274,12 +280,12 @@ func (g *GolOp) ExecuteTurns(req gol.Request, res *gol.Response) (err error) {
 			mutex.Lock()
 			copyWhole(g.world, res.NewWorld)
 			g.completedTurn = t + 1
-			fmt.Println("in loop, turn completed:", g.completedTurn)
+			//fmt.Println("in loop, turn completed:", g.completedTurn)
 			mutex.Unlock()
 		}
 
 		res.Final = gol.FinalTurnComplete{CompletedTurns: req.P.Turns, Alive: calculateAliveCells(res.NewWorld)}
-		fmt.Println("game/test finished")
+		//fmt.Println("game/test finished")
 		return
 	}
 
@@ -329,7 +335,13 @@ func (g *GolOp) KeyOp(op gol.KeyPress, res *gol.Response) (err error) {
 	return
 }
 
+//func (g *GolOp) Kill(op gol.KeyPress, res *gol.Response) (err error) {
+//	os.Exit(0)
+//	return
+//}
+
 func (g *GolOp) Kill(op gol.KeyPress, res *gol.Response) (err error) {
+	//g.needKill <- true
 	os.Exit(0)
 	return
 }
