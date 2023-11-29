@@ -127,8 +127,8 @@ func (g *GolOp) ExecuteTurns(req gol.Request, res *gol.Response) (err error) {
 		res.Final = gol.FinalTurnComplete{CompletedTurns: req.P.Turns, Alive: calculateAliveCells(g.world)}
 		return
 	} else {
-		//workers := []string{"54.227.67.232:8030", "3.90.111.104:8030", "54.237.222.162:8030", "3.87.240.120:8030"}
-		workers := []string{"127.0.0.1:8031", "127.0.0.1:8032", "127.0.0.1:8033", "127.0.0.1:8034"}
+		workers := []string{"35.172.226.22:8030", "54.84.139.55:8030", "54.82.127.203:8030", "52.91.247.6:8030"}
+		//workers := []string{"127.0.0.1:8031", "127.0.0.1:8032", "127.0.0.1:8033", "127.0.0.1:8034"}
 		clients := make([]*rpc.Client, len(workers))
 		for i, worker := range workers {
 			client, _ := rpc.Dial("tcp", worker)
